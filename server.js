@@ -14,7 +14,10 @@ app.post('/api/detect-ai', async (req, res) => {
     try {
         // Kunin ang token mula sa Environment Variables ng Render (Huwag i-hardcode dito!)
         const API_KEY = process.env.HUGGINGFACE_KEY;
-        const model_url = "https://api-inference.huggingface.co/models/umm-maybe/AI-image-detector";
+        // Palitan ang lumang URL ng ganito:
+        const model_url = "https://router.huggingface.co/hf-inference/models/umm-maybe/AI-image-detector";
+
+        //const model_url = "https://api-inference.huggingface.co/models/umm-maybe/AI-image-detector";
 
         if (!API_KEY) {
             return res.status(500).json({ error: "Nawawala ang Hugging Face API Key sa server environment variables." });
