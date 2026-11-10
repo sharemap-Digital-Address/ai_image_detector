@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="tl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hugging Face AI Image Detector + JSON Debugger</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #0f172a; color: #fff; padding: 20px; display: flex; justify-content: center; }
+        .card { background: #1e293b; padding: 20px; border-radius: 12px; width: 100%; max-width: 520px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); text-align: center; }
+        h2 { color: #38bdf8; font-size: 18px; margin-top: 0; }
+        input[type="file"] { width: 100%; color: #fff; padding: 10px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; box-sizing: border-box; margin-bottom: 15px; cursor: pointer; }
+        
+        .preview-container { margin-bottom: 15px; background: #0f172a; padding: 5px; border-radius: 6px; border: 1px solid #334155; }
+        .preview-container img { width: 100%; max-height: 180px; object-fit: contain; border-radius: 4px; display: none; margin: 0 auto; }
+        
+        .badge { padding: 12px; border-radius: 8px; font-weight: bold; font-size: 14px; margin-top: 15px; display: none; }
+        .badge-real { background: #065f46; color: #34d399; border: 1px solid #059669; }
+        .badge-ai { background: #7f1d1d; color: #fca5a5; border: 1px solid #dc2626; }
+        
+        .section-title { text-align: left; font-size: 11px; color: #94a3b8; font-weight: bold; margin-top: 15px; margin-bottom: 5px; display: block; }
+        .log-box { background: #0f172a; border: 1px solid #38bdf8; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 11px; color: #38bdf8; text-align: left; white-space: pre-wrap; max-height: 150px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Hugging Face AI Detector + Debugger</h2>
+    <p style="font-size: 12px; color: #94a3b8;">Real-time Network & JSON Diagnostics</p>
+
+    <input type="file" id="imageInput" onchange="inspectWithDebugger(event)">
+
+    <div class="preview-container">
+        <img id="imagePreview" alt="Preview">
+    </div>
+
+    <!-- Result Badge -->
+    <div id="resultBadge" class="badge"></div>
+
+    <!-- JSON & Network Debugger Console -->
+    <span class="section-title">🛠️ JSON & Network Debugger Output:</span>
+    <div id="jsonDebugger" class="log-box">{ "status": "Naghihintay ng hiling..." }</div>
+</div>
+
+<script>
+async function inspectWithDebugger(event) {
+    const file = event.target.files[0];
+    const imagePreview = document.getElementById('imagePreview');
+    const resultBadge = document.getElementById('resultBadge');
+    const jsonDebugger = document.getElementById('jsonDebugger');
+
+    if (!file) return;
+
+    imagePreview.src = URL.createObjectURL(file);
+    imagePreview.style.display = 'block';
+    resultBadge.style.display = 'none';
+    jsonDebugger.innerText = "⏳ Inihahanda ang file at kumokonekta sa API...";
+
+    const API_KEY = "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";
+    const model_url = "https://api-inference.huggingface.co/models/umm-maybe/AI-image-detector";
+
+    let debugData = {
+        file_info: {
+            name: file.name,
+            size_bytes: file.size,
+            type: file.type || "unknown"
+        },
+        request_sent: true,
+        endpoint: model_url
+    };
+
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+
+        const response = await fetch(model_url, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${API_KEY}`,
+                "Content-Type": file.type || "application/octet-stream"
+            },
+            body: arrayBuffer
+        });
+
+        debugData.response_status = response.status;
+        debugData.response_status_text = response.statusText;
+
+        // Kunin ang raw text muna para masuri kung valid JSON ba o HTML error ang ibinalik
+        const rawText = await response.text();
+        
+        try {
+            const parsedJson = JSON.parse(rawText);
+            debugData.response_body_json = parsedJson;
+        } catch (e) {
+            debugData.response_body_raw_text = rawText; // Kung sakaling hindi JSON (hal. HTML error)
+        }
+
+        jsonDebugger.innerText = JSON.stringify(debugData, null, 2);
+
+        if (response.ok && debugData.response_body_json) {
+            parseAIResult(debugData.response_body_json);
+        } else {
+            resultBadge.style.display = 'block';
+            resultBadge.className = "badge badge-ai";
+            resultBadge.innerHTML = `⚠️ API Error (Status: ${response.status}) - Tingnan ang Debugger`;
+        }
+
+    } catch (error) {
+        console.error("Debugger Error:", error);
+        debugData.error_thrown = error.message;
+        jsonDebugger.innerText = JSON.stringify(debugData, null, 2);
+        
+        resultBadge.style.display = 'block';
+        resultBadge.className = "badge badge-ai";
+        resultBadge.innerHTML = `⚠️ Network o Script Error`;
+    }
+}
+
+function parseAIResult(result) {
+    const resultBadge = document.getElementById('resultBadge');
+    resultBadge.style.display = 'block';
+
+    if (Array.isArray(result) && result.length > 0) {
+        let topResult = result.reduce((prev, current) => (prev.score > current.score) ? prev : current);
+        let label = topResult.label.toLowerCase();
+        let confidence = (topResult.score * 100).toFixed(2);
+
+        if (label.includes('ai') || label.includes('fake') || label.includes('generated')) {
+            resultBadge.className = "badge badge-ai";
+            resultBadge.innerHTML = `⚠️ AI-GENERATED / FAKE DETECTED (${confidence}%)<br><span style="font-size:11px; font-weight:normal;">Marka: ${topResult.label}</span>`;
+        } else {
+            resultBadge.className = "badge badge-real";
+            resultBadge.innerHTML = `✅ HUMAN / REAL IMAGE (${confidence}%)<br><span style="font-size:11px; font-weight:normal;">Marka: ${topResult.label}</span>`;
+        }
+    } else if (result.error) {
+        resultBadge.className = "badge badge-ai";
+        resultBadge.innerHTML = `⚠️ Error mula sa Hugging Face: ${result.error}`;
+    } else {
+        resultBadge.className = "badge badge-ai";
+        resultBadge.innerHTML = `ℹ️ Natanggap ang Response (Suriin ang JSON Debugger)`;
+    }
+}
+</script>
+
+</body>
+</html>
